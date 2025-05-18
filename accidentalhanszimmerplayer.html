@@ -1,0 +1,753 @@
+import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { cn } from '@/lib/utils';
+import {
+    Play,
+    Pause,
+    SkipForward,
+    SkipBack,
+    ListMusic,
+    Volume2,
+    VolumeX,
+    Repeat,
+    Repeat1,
+    Shuffle,
+    Loader2,
+    ChevronDown,
+    Search,
+    X,
+    Music,
+} from 'lucide-react';
+
+// ===============================
+// Types & Interfaces
+// ===============================
+
+interface Song {
+    id: string;
+    title: string;
+    artist: string;
+    audioSrc: string;
+    coverSrc: string;
+}
+
+interface Playlist {
+    id: string;
+    name: string;
+    songs: Song[];
+}
+
+// ===============================
+// Constants
+// ===============================
+
+const DEFAULT_PLAYLIST: Playlist = {
+    id: 'default-playlist',
+    name: 'Default Playlist',
+    songs: [
+        {
+            id: '1',
+            title: 'Interstellar',
+            artist: 'Hans Zimmer',
+            audioSrc: 'https://www.bensound.com/bensound-music/bensound-epic.mp3',
+            coverSrc: 'https://m.media-amazon.com/images/I/81+U5-UjKRL._UF1000,1000_QL80_.jpg',
+        },
+        {
+            id: '2',
+            title: 'Time',
+            artist: 'Hans Zimmer',
+            audioSrc: 'https://www.bensound.com/bensound-music/bensound-dubstep.mp3',
+            coverSrc: 'https://m.media-amazon.com/images/I/81WFwgo-tFUL._UF1000,1000_QL80_.jpg',
+        },
+        {
+            id: '3',
+            title: 'Cornfield Chase',
+            artist: 'Hans Zimmer',
+            audioSrc: 'https://www.bensound.com/bensound-music/bensound-actionable.mp3',
+            coverSrc: 'https://m.media-amazon.com/images/I/71jJWuOQWcL._UF1000,1000_QL80_.jpg',
+        },
+        {
+            id: '4',
+            title: 'S.T.A.Y.',
+            artist: 'Hans Zimmer',
+            audioSrc: 'https://www.bensound.com/bensound-music/bensound-happyrock.mp3',
+            coverSrc: 'https://m.media-amazon.com/images/I/81C6j-Kx-yL._UF1000,1000_QL80_.jpg',
+        },
+        {
+            id: '5',
+            title: 'Mountains',
+            artist: 'Hans Zimmer',
+            audioSrc: 'https://www.bensound.com/bensound-music/bensound-danceable.mp3',
+            coverSrc: 'https://m.media-amazon.com/images/I/71e8T+gKFwL._UF1000,1000_QL80_.jpg',
+        },
+    ],
+};
+
+// ===============================
+// Animation Variants
+// ===============================
+
+const nowPlayingVariants = {
+    hidden: { opacity: 0, y: 20 },
+    visible: { opacity: 1, y: 0, transition: { duration: 0.3 } },
+    exit: { opacity: 0, y: -20, transition: { duration: 0.2 } },
+};
+
+const playlistVariants = {
+    hidden: { opacity: 0, x: -20 },
+    visible: { opacity: 1, x: 0, transition: { duration: 0.3 } },
+    exit: { opacity: 0, x: 20, transition: { duration: 0.2 } },
+};
+
+const songVariants = {
+    hidden: { opacity: 0, scale: 0.95 },
+    visible: { opacity: 1, scale: 1, transition: { duration: 0.2 } },
+    exit: { opacity: 0, scale: 0.9, transition: { duration: 0.1 } },
+};
+
+// ===============================
+// Helper Functions
+// ===============================
+
+const formatTime = (seconds: number): string => {
+    const minutes = Math.floor(seconds / 60);
+    const remainingSeconds = Math.floor(seconds % 60);
+    return `${minutes}:${remainingSeconds < 10 ? '0' : ''}${remainingSeconds}`;
+};
+
+// ===============================
+// Sub-Components
+// ===============================
+
+const NowPlaying = ({
+    song,
+    isPlaying,
+    currentTime,
+    duration,
+    onPausePlay,
+}: {
+    song: Song;
+    isPlaying: boolean;
+    currentTime: number;
+    duration: number;
+    onPausePlay: () => void;
+}) => {
+    return (
+        <motion.div
+            variants={nowPlayingVariants}
+            initial="hidden"
+            animate="visible"
+            exit="exit"
+            className="flex flex-col items-center justify-center gap-6"
+        >
+            <div className="relative w-64 h-64 rounded-xl overflow-hidden shadow-2xl">
+                <img
+                    src={song.coverSrc}
+                    alt={`${song.title} Cover`}
+                    className="w-full h-full object-cover"
+                />
+                <motion.div
+                    animate={{
+                        rotate: isPlaying ? 360 : 0,
+                        transition: {
+                            repeat: Infinity,
+                            duration: 20,
+                            ease: 'linear',
+                            when: 'beforeChildren',
+                        },
+                    }}
+                    className="absolute inset-0"
+                />
+            </div>
+            <div className="text-center">
+                <h2 className="text-2xl font-semibold text-white">{song.title}</h2>
+                <p className="text-gray-400">{song.artist}</p>
+            </div>
+            <div className="w-full">
+                <input
+                    type="range"
+                    min={0}
+                    max={duration}
+                    value={currentTime}
+                    className="w-full"
+                    onChange={() => {}} // Dummy onChange to remove warning
+                />
+                <div className="flex justify-between text-sm text-gray-400">
+                    <span>{formatTime(currentTime)}</span>
+                    <span>{formatTime(duration)}</span>
+                </div>
+            </div>
+            <Button
+                onClick={onPausePlay}
+                className="p-4 rounded-full bg-white/10 text-white hover:bg-white/20"
+            >
+                {isPlaying ? (
+                    <Pause className="w-6 h-6" />
+                ) : (
+                    <Play className="w-6 h-6" />
+                )}
+            </Button>
+        </motion.div>
+    );
+};
+
+const PlaylistView = ({
+    playlist,
+    currentSongId,
+    onSelectSong,
+}: {
+    playlist: Playlist;
+    currentSongId: string | null;
+    onSelectSong: (song: Song) => void;
+}) => {
+    const [searchTerm, setSearchTerm] = useState('');
+
+    const filteredSongs = searchTerm
+        ? playlist.songs.filter((song) =>
+              song.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
+              song.artist.toLowerCase().includes(searchTerm.toLowerCase())
+          )
+        : playlist.songs;
+
+    return (
+        <motion.div
+            variants={playlistVariants}
+            initial="hidden"
+            animate="visible"
+            exit="exit"
+            className="flex flex-col h-full"
+        >
+            <div className="sticky top-0 z-10 bg-gray-900/90 backdrop-blur-md py-4 px-6 border-b border-gray-800">
+                <h2 className="text-2xl font-semibold text-white">{playlist.name}</h2>
+                <div className="mt-4 relative">
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 w-5 h-5" />
+                    <Input
+                        type="text"
+                        placeholder="Search songs..."
+                        value={searchTerm}
+                        onChange={(e) => setSearchTerm(e.target.value)}
+                        className="pl-10 bg-gray-800 border-gray-700 text-white placeholder:text-gray-400"
+                    />
+                    {searchTerm && (
+                        <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => setSearchTerm('')}
+                            className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-white"
+                        >
+                            <X className="w-4 h-4" />
+                        </Button>
+                    )}
+                </div>
+            </div>
+            <div className="flex-1 overflow-y-auto">
+                <AnimatePresence>
+                    {filteredSongs.map((song) => (
+                        <motion.div
+                            key={song.id}
+                            variants={songVariants}
+                            initial="hidden"
+                            animate="visible"
+                            exit="exit"
+                            className={cn(
+                                'flex items-center gap-4 p-4 border-b border-gray-800 last:border-none',
+                                'hover:bg-gray-800/50 transition-colors duration-200',
+                                currentSongId === song.id && 'bg-gray-800/50'
+                            )}
+                            onClick={() => onSelectSong(song)}
+                            style={{ cursor: 'pointer' }}
+                        >
+                            <div className="w-12 h-12 rounded-md overflow-hidden flex-shrink-0">
+                                <img
+                                    src={song.coverSrc}
+                                    alt={`${song.title} Cover`}
+                                    className="w-full h-full object-cover"
+                                />
+                            </div>
+                            <div>
+                                <h3
+                                    className={cn(
+                                        'text-white font-medium',
+                                        currentSongId === song.id &&
+                                            'text-blue-400'
+                                    )}
+                                >
+                                    {song.title}
+                                </h3>
+                                <p className="text-gray-400">{song.artist}</p>
+                            </div>
+                        </motion.div>
+                    ))}
+                </AnimatePresence>
+            </div>
+        </motion.div>
+    );
+};
+
+const MiniPlayer = ({
+    song,
+    isPlaying,
+    onPausePlay,
+    onSelectSong,
+    onTogglePlaylist,
+    showPlaylist,
+}: {
+    song: Song | null;
+    isPlaying: boolean;
+    onPausePlay: () => void;
+    onSelectSong: (song: Song) => void;
+    onTogglePlaylist: () => void;
+    showPlaylist: boolean;
+}) => {
+    if (!song) return null;
+
+    return (
+        <motion.div
+            initial={{ opacity: 0, y: 50 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.3 }}
+            className="fixed bottom-0 left-0 right-0 bg-gray-900/90 backdrop-blur-md border-t border-gray-800 p-4 flex items-center justify-between gap-4"
+        >
+            <div
+                className="flex items-center gap-4 cursor-pointer"
+                onClick={() => {
+                    // Find the song in the default playlist and play it.
+                    const songToPlay = DEFAULT_PLAYLIST.songs.find(
+                        (s) => s.id === song.id
+                    );
+                    if (songToPlay) {
+                        onSelectSong(songToPlay);
+                    }
+                }}
+            >
+                <div className="w-12 h-12 rounded-md overflow-hidden flex-shrink-0">
+                    <img
+                        src={song.coverSrc}
+                        alt={`${song.title} Cover`}
+                        className="w-full h-full object-cover"
+                    />
+                </div>
+                <div>
+                    <h3 className="text-white font-medium">{song.title}</h3>
+                    <p className="text-gray-400 text-sm">{song.artist}</p>
+                </div>
+            </div>
+            <div className="flex items-center gap-4">
+                <Button
+                    onClick={onPausePlay}
+                    className="p-3 rounded-full bg-white/10 text-white hover:bg-white/20"
+                >
+                    {isPlaying ? (
+                        <Pause className="w-5 h-5" />
+                    ) : (
+                        <Play className="w-5 h-5" />
+                    )}
+                </Button>
+                <Button
+                    onClick={onTogglePlaylist}
+                    className={cn(
+                        'p-3 rounded-full bg-white/10 text-white hover:bg-white/20',
+                        showPlaylist && 'bg-blue-500/20'
+                    )}
+                >
+                    <ListMusic className="w-5 h-5" />
+                </Button>
+            </div>
+        </motion.div>
+    );
+};
+
+// ===============================
+// Main Component
+// ===============================
+
+const MusicPlayerApp = () => {
+    // ===============================
+    // State
+    // ===============================
+
+    const [currentSong, setCurrentSong] = useState<Song | null>(
+        DEFAULT_PLAYLIST.songs[0]
+    );
+    const [isPlaying, setIsPlaying] = useState(false);
+    const [currentTime, setCurrentTime] = useState(0);
+    const [duration, setDuration] = useState(0);
+    const [repeatMode, setRepeatMode] = useState<'none' | 'all' | 'one'>('none');
+    const [isShuffle, setIsShuffle] = useState(false);
+    const [isLoading, setIsLoading] = useState(false);
+    const [showPlaylist, setShowPlaylist] = useState(false);
+    const [playlist, setPlaylist] = useState<Playlist>(DEFAULT_PLAYLIST);
+    const [volume, setVolume] = useState(1); // 0 to 1
+
+    // ===============================
+    // Refs
+    // ===============================
+
+    const audioRef = useRef<HTMLAudioElement>(null);
+    const animationFrameRef = useRef<number>();
+
+    // ===============================
+    // Effects
+    // ===============================
+
+    // Load initial song
+    useEffect(() => {
+        if (currentSong && audioRef.current) {
+            audioRef.current.src = currentSong.audioSrc;
+            setIsLoading(true); // Start loading
+            audioRef.current.load();
+        }
+    }, [currentSong]);
+
+    // Handle audio metadata (duration)
+    useEffect(() => {
+        const handleLoadedMetadata = () => {
+            if (audioRef.current) {
+                setDuration(audioRef.current.duration);
+                setIsLoading(false); // Stop loading when metadata is loaded
+            }
+        };
+
+        if (audioRef.current) {
+            audioRef.current.addEventListener(
+                'loadedmetadata',
+                handleLoadedMetadata
+            );
+        }
+
+        return () => {
+            if (audioRef.current) {
+                audioRef.current.removeEventListener(
+                    'loadedmetadata',
+                    handleLoadedMetadata
+                );
+            }
+        };
+    }, []);
+
+    // Play/Pause
+    useEffect(() => {
+        if (isPlaying && audioRef.current) {
+            audioRef.current.play().catch((err) => {
+                console.error('Playback failed:', err);
+                setIsPlaying(false);
+            });
+        } else if (audioRef.current) {
+            audioRef.current.pause();
+        }
+    }, [isPlaying]);
+
+    // Update current time
+    useEffect(() => {
+        const updateTime = () => {
+            if (audioRef.current) {
+                setCurrentTime(audioRef.current.currentTime);
+            }
+            animationFrameRef.current = requestAnimationFrame(updateTime);
+        };
+
+        if (isPlaying) {
+            animationFrameRef.current = requestAnimationFrame(updateTime);
+        }
+
+        return () => {
+            if (animationFrameRef.current) {
+                cancelAnimationFrame(animationFrameRef.current);
+            }
+        };
+    }, [isPlaying]);
+
+    // Handle song end
+    useEffect(() => {
+        const handleEnded = () => {
+            handleSongEnd();
+        };
+
+        if (audioRef.current) {
+            audioRef.current.addEventListener('ended', handleEnded);
+        }
+
+        return () => {
+            if (audioRef.current) {
+                audioRef.current.removeEventListener('ended', handleEnded);
+            }
+        };
+    }, [repeatMode, isShuffle, playlist, currentSong]); // Depend on these
+
+    // Apply volume changes
+    useEffect(() => {
+        if (audioRef.current) {
+            audioRef.current.volume = volume;
+        }
+    }, [volume]);
+
+    // ===============================
+    // Handlers
+    // ===============================
+
+    const handlePausePlay = () => {
+        setIsPlaying(!isPlaying);
+    };
+
+    const handleSelectSong = (song: Song) => {
+        setCurrentSong(song);
+        setIsPlaying(true);
+        setShowPlaylist(false); // Hide playlist when song is selected
+    };
+
+    const handleSongEnd = () => {
+        if (repeatMode === 'one') {
+            if (audioRef.current) {
+                audioRef.current.currentTime = 0;
+                audioRef.current.play();
+            }
+        } else {
+            let nextSongIndex: number;
+            if (isShuffle) {
+                do {
+                    nextSongIndex = Math.floor(
+                        Math.random() * playlist.songs.length
+                    );
+                } while (playlist.songs[nextSongIndex].id === currentSong?.id);
+            } else {
+                const currentIndex = playlist.songs.findIndex(
+                    (song) => song.id === currentSong?.id
+                );
+                nextSongIndex = (currentIndex + 1) % playlist.songs.length;
+            }
+
+            if (nextSongIndex < playlist.songs.length) {
+                setCurrentSong(playlist.songs[nextSongIndex]);
+                setIsPlaying(true);
+            } else if (repeatMode === 'all') {
+                setCurrentSong(playlist.songs[0]);
+                setIsPlaying(true);
+            } else {
+                setIsPlaying(false);
+                setCurrentTime(0);
+            }
+        }
+    };
+
+    const handleSkipNext = () => {
+        let nextSongIndex: number;
+        if (isShuffle) {
+            do {
+                nextSongIndex = Math.floor(
+                    Math.random() * playlist.songs.length
+                );
+            } while (playlist.songs[nextSongIndex].id === currentSong?.id);
+        } else {
+            const currentIndex = playlist.songs.findIndex(
+                (song) => song.id === currentSong?.id
+            );
+            nextSongIndex = (currentIndex + 1) % playlist.songs.length;
+        }
+
+        setCurrentSong(playlist.songs[nextSongIndex]);
+        setIsPlaying(true);
+        setCurrentTime(0);
+    };
+
+    const handleSkipPrevious = () => {
+        let prevSongIndex: number;
+        if (isShuffle) {
+            do {
+                prevSongIndex = Math.floor(
+                    Math.random() * playlist.songs.length
+                );
+            } while (playlist.songs[prevSongIndex].id === currentSong?.id);
+        } else {
+            const currentIndex = playlist.songs.findIndex(
+                (song) => song.id === currentSong?.id
+            );
+            prevSongIndex =
+                (currentIndex - 1 + playlist.songs.length) %
+                playlist.songs.length;
+        }
+
+        setCurrentSong(playlist.songs[prevSongIndex]);
+        setIsPlaying(true);
+        setCurrentTime(0);
+    };
+
+    const handleToggleRepeat = () => {
+        setRepeatMode((prevMode) =>
+            prevMode === 'none' ? 'all' : prevMode === 'all' ? 'one' : 'none'
+        );
+    };
+
+    const handleToggleShuffle = () => {
+        setIsShuffle(!isShuffle);
+    };
+
+    const handleTogglePlaylist = () => {
+        setShowPlaylist(!showPlaylist);
+    };
+
+    const handleVolumeChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        setVolume(parseFloat(e.target.value));
+    };
+
+    const getVolumeIcon = () => {
+        if (volume === 0) {
+            return <VolumeX className="w-5 h-5" />;
+        } else {
+            return <Volume2 className="w-5 h-5" />;
+        }
+    };
+
+    // ===============================
+    // Render
+    // ===============================
+
+    return (
+        <div className="min-h-screen bg-gray-900 flex flex-col">
+            <div className="flex-1 flex flex-col md:flex-row relative overflow-hidden">
+                {/* Main Content Area */}
+                <div
+                    className={cn(
+                        'flex-1 flex items-center justify-center transition-all duration-300',
+                        showPlaylist ? 'md:mr-72' : 'md:mr-0'
+                    )}
+                >
+                    {isLoading ? (
+                        <div className="flex items-center justify-center">
+                            <Loader2 className="w-8 h-8 animate-spin text-gray-400" />
+                        </div>
+                    ) : currentSong ? (
+                        <NowPlaying
+                            song={currentSong}
+                            isPlaying={isPlaying}
+                            currentTime={currentTime}
+                            duration={duration}
+                            onPausePlay={handlePausePlay}
+                        />
+                    ) : (
+                        <div className="text-center text-gray-400">
+                            <Music className="w-12 h-12 mx-auto mb-4" />
+                            <p>No song selected.</p>
+                        </div>
+                    )}
+                </div>
+
+                {/* Playlist Sidebar (Hidden on small screens) */}
+                <AnimatePresence>
+                    {showPlaylist && (
+                        <motion.div
+                            initial={{ x: '100%' }}
+                            animate={{ x: 0 }}
+                            exit={{ x: '100%' }}
+                            transition={{ type: 'spring', stiffness: 200, damping: 25 }}
+                            className="fixed top-0 right-0 h-full w-full md:w-72 bg-gray-900/90 backdrop-blur-md border-l border-gray-800 z-20"
+                        >
+                            <PlaylistView
+                                playlist={playlist}
+                                currentSongId={currentSong?.id || null}
+                                onSelectSong={handleSelectSong}
+                            />
+                        </motion.div>
+                    )}
+                </AnimatePresence>
+            </div>
+
+            {/* Controls and Mini Player */}
+            <div className="bg-gray-900/90 backdrop-blur-md border-t border-gray-800 p-4">
+                {currentSong && (
+                    <div className="max-w-md mx-auto flex items-center justify-between gap-6">
+                        <div className="flex items-center gap-4">
+                            <Button
+                                onClick={handleSkipPrevious}
+                                className="p-3 rounded-full bg-white/10 text-white hover:bg-white/20"
+                            >
+                                <SkipBack className="w-5 h-5" />
+                            </Button>
+                            <Button
+                                onClick={handlePausePlay}
+                                className="p-4 rounded-full bg-white/10 text-white hover:bg-white/20"
+                            >
+                                {isPlaying ? (
+                                    <Pause className="w-6 h-6" />
+                                ) : (
+                                    <Play className="w-6 h-6" />
+                                )}
+                            </Button>
+                            <Button
+                                onClick={handleSkipNext}
+                                className="p-3 rounded-full bg-white/10 text-white hover:bg-white/20"
+                            >
+                                <SkipForward className="w-5 h-5" />
+                            </Button>
+                        </div>
+
+                        <div className="flex-1">
+                            <div className="flex items-center gap-4">
+                                {getVolumeIcon()}
+                                <input
+                                    type="range"
+                                    min={0}
+                                    max={1}
+                                    step={0.01}
+                                    value={volume}
+                                    onChange={handleVolumeChange}
+                                    className="w-full"
+                                />
+                            </div>
+                        </div>
+
+                        <div className="flex items-center gap-4">
+                            <Button
+                                onClick={handleToggleRepeat}
+                                className={cn(
+                                    'p-3 rounded-full bg-white/10 text-white hover:bg-white/20',
+                                    repeatMode === 'one' && 'text-blue-400',
+                                    repeatMode === 'all' && 'text-blue-400'
+                                )}
+                            >
+                                {repeatMode === 'one' ? (
+                                    <Repeat1 className="w-5 h-5" />
+                                ) : (
+                                    <Repeat className="w-5 h-5" />
+                                )}
+                            </Button>
+                            <Button
+                                onClick={handleToggleShuffle}
+                                className={cn(
+                                    'p-3 rounded-full bg-white/10 text-white hover:bg-white/20',
+                                    isShuffle && 'text-blue-400'
+                                )}
+                            >
+                                <Shuffle className="w-5h-5" />
+                            </Button>
+                            <Button
+                                onClick={handleTogglePlaylist}
+                                className={cn(
+                                    'p-3 rounded-full bg-white/10 text-white hover:bg-white/20 md:hidden'
+                                )}
+                            >
+                                <ListMusic className="w-5 h-5" />
+                            </Button>
+                        </div>
+                    </div>
+                )}
+            </div>
+
+            {/* Hidden audio element */}
+            <audio ref={audioRef} />
+            {currentSong && (
+                <MiniPlayer
+                    song={currentSong}
+                    isPlaying={isPlaying}
+                    onPausePlay={handlePausePlay}
+                    onSelectSong={handleSelectSong}
+                    onTogglePlaylist={handleTogglePlaylist}
+                    showPlaylist={showPlaylist}
+                />
+            )}
+        </div>
+    );
+};
+
+export default MusicPlayerApp;
