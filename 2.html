@@ -1,0 +1,588 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>File to Table Converter</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&display=swap" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+        }
+        #fileInput {
+            opacity: 0;
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            cursor: pointer;
+        }
+        .upload-button-wrapper {
+            position: relative;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            padding: 0.75rem 2rem;
+            background-color: #3b82f6; /* Blue 500 */
+            color: #fff;
+            font-medium;
+            border-radius: 0.375rem; /* Rounded md */
+            shadow-md;
+            cursor: pointer;
+            transition: background-color 0.3s ease;
+            overflow: hidden;
+        }
+        .upload-button-wrapper:hover {
+            background-color: #2563eb; /* Blue 700 */
+        }
+        .upload-button-text {
+            margin-left: 0.5rem; /* ml-2 */
+        }
+        #downloadButton {
+            margin-top: 1rem;
+        }
+        #analysisButton {
+            margin-top: 1rem;
+            margin-left: 1rem;
+        }
+        .chart-container {
+            width: 80%;
+            margin: 2rem auto;
+            border: 1px solid #e5e7eb;
+            border-radius: 0.5rem;
+            padding: 1rem;
+            background-color: #fff;
+            box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1), 0 1px 2px -1px rgba(0, 0, 0, 0.1);
+            display: none; /* Initially hidden */
+        }
+        .chart-container canvas {
+            width: 100%;
+            height: 100%;
+        }
+        #statsContainer {
+            margin-bottom: 2rem;
+            padding: 1rem;
+            border: 1px solid #e5e7eb;
+            border-radius: 0.5rem;
+            background-color: #f7fafc;
+        }
+        #statsContainer h2 {
+            font-size: 1.5rem;
+            font-weight: 600;
+            color: #334155;
+            margin-bottom: 1rem;
+        }
+        #statsContainer ul {
+            list-style-position: inside;
+            margin-left: 0;
+            padding-left: 0;
+        }
+        #statsContainer li {
+            margin-bottom: 0.5rem;
+            color: #4b5563;
+        }
+        #symptomList {
+            list-style-type: disc;
+        }
+        .chart-download-buttons {
+            display: flex;
+            justify-content: flex-end;
+            margin-top: 1rem;
+        }
+
+        .chart-download-button {
+            background-color: #4CAF50; /* Green */
+            color: white;
+            padding: 10px 20px;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            margin-left: 10px;
+            text-decoration: none;
+            font-size: 14px;
+        }
+
+        .chart-download-button:hover {
+            background-color: #367c39;
+        }
+
+    </style>
+</head>
+<body class="bg-gray-100 p-6">
+    <div class="container max-w-4xl mx-auto bg-white shadow-md rounded-lg p-8">
+        <h1 class="text-2xl font-semibold text-blue-600 text-center mb-6">File to Table Converter</h1>
+        <div class="mb-6">
+           <div class="upload-button-wrapper">
+                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-6 h-6">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M12 16.5V9.75m0 0l-3 3m3-3l3 3M6 10.5a8.25 8.25 0 0116.5 0v5.4a8.25 8.25 0 01-16.5 0V10.5z" />
+                </svg>
+                <span class="upload-button-text">Upload File</span>
+                <input id="fileInput" type="file" accept=".csv, .txt, .xls, .xlsx">
+            </div>
+            <p id="fileInfo" class="mt-2 text-sm text-gray-500">No file selected.</p>
+            <div id="error" class="mt-4 text-red-500 font-semibold"></div>
+        </div>
+        <div id="statsContainer" style="display: none;">
+            <h2>Dataset Statistics</h2>
+            <ul id="statsList">
+                <li id="totalSymptoms">Total Symptoms Recorded: </li>
+                <li id="daysWithSymptoms">Days With Symptoms Recorded: </li>
+                <li id="dateRange">Time Period: </li>
+                <li id="symptomCounts">Symptom Counts:
+                    <ul id="symptomList"></ul>
+                </li>
+            </ul>
+        </div>
+        <div id="results" class="mt-6">
+            <h2 class="text-xl font-semibold text-gray-800 mb-4">Data Preview</h2>
+            <div id="tableContainer" class="rounded-md overflow-x-auto">
+                <table id="dataTable" class="min-w-full bg-white rounded-md shadow-sm">
+                    <thead class="bg-gray-100">
+                        <tr><th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">No data to display</th></tr>
+                    </thead>
+                    <tbody>
+                        <tr><td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">Please upload a file to see the data.</td></tr>
+                    </tbody>
+                </table>
+            </div>
+            <div class="flex">
+                <button id="downloadButton" class="bg-green-500 hover:bg-green-700 text-white font-bold py-2 px-4 rounded focus:outline-none focus:shadow-outline" style="display:none;">Download CSV</button>
+                <button id="analysisButton" class="bg-purple-500 hover:bg-purple-700 text-white font-bold py-2 px-4 rounded focus:outline-none focus:shadow-outline ml-4" style="display:none;">Show Analysis</button>
+            </div>
+            <div class="chart-container">
+                <canvas id="symptomsChart"></canvas>
+                 <div class="chart-download-buttons">
+                    <a id="downloadChartPNG" class="chart-download-button" download="symptoms_chart.png">Download PNG</a>
+                    <a id="downloadChartCSV" class="chart-download-button" download="symptoms_chart.csv">Download CSV</a>
+                </div>
+                <div class="mt-4 flex justify-end">
+                    <button id="toggleChartButton" class="bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded focus:outline-none focus:shadow-outline">Toggle Chart</button>
+                </div>
+            </div>
+        </div>
+    </div>
+    <script src="https://unpkg.com/xlsx/dist/xlsx.full.min.js"></script>
+    <script>
+    const fileInput = document.getElementById('fileInput');
+    const fileInfo = document.getElementById('fileInfo');
+    const errorDiv = document.getElementById('error');
+    const tableContainer = document.getElementById('tableContainer');
+    const dataTable = document.getElementById('dataTable');
+    const downloadButton = document.getElementById('downloadButton');
+    const analysisButton = document.getElementById('analysisButton');
+    const chartContainer = document.querySelector('.chart-container');
+    const symptomsChartCanvas = document.getElementById('symptomsChart');
+    const toggleChartButton = document.getElementById('toggleChartButton');
+    const statsContainer = document.getElementById('statsContainer');
+    const totalSymptomsElement = document.getElementById('totalSymptoms');
+    const daysWithSymptomsElement = document.getElementById('daysWithSymptoms');
+    const dateRangeElement = document.getElementById('dateRange');
+    const symptomCountsElement = document.getElementById('symptomCounts');
+    const symptomListElement = document.getElementById('symptomList');
+    const downloadChartPNGButton = document.getElementById('downloadChartPNG');
+    const downloadChartCSVButton = document.getElementById('downloadChartCSV');
+
+
+    let tableData = []; // To store the processed data for download
+    let symptomsChart;
+    let chartType = 'line'; // Initial chart type
+    let datasetStats = {};
+
+
+    fileInput.addEventListener('change', function() {
+        if (this.files.length > 0) {
+            fileInfo.textContent = `File selected: ${this.files[0].name}`;
+            errorDiv.textContent = ''; // Clear any previous error
+            parseFile(this.files[0]);
+        } else {
+            fileInfo.textContent = 'No file selected.';
+            // Clear the table
+            dataTable.innerHTML = `
+                <thead class="bg-gray-100">
+                    <tr><th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">No data to display</th></tr>
+                </thead>
+                <tbody>
+                    <tr><td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">Please upload a file to see the data.</td></tr>
+                </tbody>
+            `;
+            downloadButton.style.display = 'none'; // Hide download button
+            analysisButton.style.display = 'none';
+            chartContainer.style.display = 'none';
+            statsContainer.style.display = 'none';
+        }
+    });
+
+    function parseFile(file) {
+        const reader = new FileReader();
+
+        reader.onload = function(event) {
+            const content = event.target.result;
+            let data;
+            if (file.name.endsWith('.csv') || file.name.endsWith('.txt')) {
+                data = parseCSV(content);
+            } else if (file.name.endsWith('.xls') || file.name.endsWith('.xlsx')) {
+                data = parseExcel(content);
+            } else {
+                errorDiv.textContent = 'Error: Invalid file type. Please upload a CSV, TXT, XLS, or XLSX file.';
+                return;
+            }
+
+            if (data && data.length > 0) {
+                processData(data); // Process the data to fill in missing "day of cycle" values
+                displayTable(data);
+                tableData = data; // Store processed data for download
+                downloadButton.style.display = 'block'; // Show download button
+                analysisButton.style.display = 'block';
+                datasetStats = calculateStats(data);
+                displayStats(datasetStats);
+                statsContainer.style.display = 'block';
+            } else {
+                errorDiv.textContent = 'Error: No data found in the file or invalid format.';
+                 dataTable.innerHTML = `
+                    <thead class="bg-gray-100">
+                        <tr><th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">No data to display</th></tr>
+                    </thead>
+                    <tbody>
+                        <tr><td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">No data found in the file or invalid format.</td></tr>
+                    </tbody>
+                `;
+                downloadButton.style.display = 'none'; // Hide download button
+                analysisButton.style.display = 'none';
+                chartContainer.style.display = 'none';
+                statsContainer.style.display = 'none';
+            }
+        };
+
+        reader.onerror = function() {
+            errorDiv.textContent = 'Error reading file.';
+        };
+
+        if (file.name.endsWith('.xls') || file.name.endsWith('.xlsx')) {
+            reader.readAsArrayBuffer(file);
+        } else {
+            reader.readAsText(file);
+        }
+    }
+
+    function parseCSV(content) {
+        const lines = content.trim().split('\n');
+        const header = lines[0].split(',').map(h => h.trim());
+        const data = [];
+        for (let i = 1; i < lines.length; i++) {
+            const values = lines[i].split(',').map(v => v.trim());
+            if (values.length === header.length) {
+                const entry = {};
+                for (let j = 0; j < header.length; j++) {
+                    entry[header[j]] = values[j];
+                }
+                data.push(entry);
+            }
+        }
+        return data;
+    }
+
+    function parseExcel(content) {
+        try {
+            const workbook = XLSX.read(content, { type: 'array' });
+            const sheetName = workbook.SheetNames[0];
+            const worksheet = workbook.Sheets[sheetName];
+            const data = XLSX.utils.sheet_to_json(worksheet, { header: 1, raw: true });
+
+            if (data && data.length > 0) {
+                const header = data[0].map(h => h ? h.toString().trim() : ''); // Ensure header cells are not null/undefined
+                const result = [];
+                for (let i = 1; i < data.length; i++) {
+                    const row = data[i];
+                     if (row) { // Check if row is not null/undefined
+                        const entry = {};
+                        for (let j = 0; j < header.length; j++) {
+                            entry[header[j]] = row[j] ? row[j].toString().trim() : ''; // Ensure cell values are not null/undefined
+                        }
+                        result.push(entry);
+                    }
+                }
+                return result;
+            }
+            return [];
+        } catch (error) {
+            console.error("Error parsing Excel file:", error);
+            errorDiv.textContent = 'Error: Could not parse Excel file.  Please ensure it is a valid Excel file.';
+            return null;
+        }
+    }
+
+    function parseDateString(dateString) {
+        const parts = dateString.split(/[-/.]/); // Allow -, /, and . as separators
+        if (parts.length === 3) {
+            let day = parseInt(parts[0], 10);
+            let month = parseInt(parts[1], 10) - 1; // Month is 0-indexed
+            let year = parseInt(parts[2], 10);
+             if (year < 100) {
+                year += 2000;  // Assume 21st century for 2-digit years
+            }
+            // Basic date validation
+            if (month >= 0 && month <= 11 && day >= 1 && day <= 31) {
+                return new Date(year, month, day);
+            }
+        }
+        return null; // Invalid date
+    }
+
+    function processData(data) {
+        let lastDay1Date = null;
+        let day1Found = false;
+
+        for (let i = 0; i < data.length; i++) {
+            const row = data[i];
+            const rowDate = row['date'] ? parseDateString(row['date']) : null;
+            let dayOfCycleValue = row['day of cycle'];
+
+
+            if (dayOfCycleValue && dayOfCycleValue.toLowerCase() === 'day 1') {
+                lastDay1Date = rowDate;
+                day1Found = true;
+            } else if (rowDate && !dayOfCycleValue && day1Found) {
+                // Calculate days since last day 1
+                const daysSinceLastDay1 = Math.floor((rowDate - lastDay1Date) / (1000 * 60 * 60 * 24)) + 1;
+                row['day of cycle'] = daysSinceLastDay1.toString();
+            }
+            else if (rowDate && !dayOfCycleValue && !day1Found){
+                 row['day of cycle'] = "N/A";
+            }
+        }
+    }
+
+    function displayTable(data) {
+        if (!data || data.length === 0) {
+             dataTable.innerHTML = `
+                    <thead class="bg-gray-100">
+                        <tr><th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">No data to display</th></tr>
+                    </thead>
+                    <tbody>
+                        <tr><td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">Please upload a file to see the data.</td></tr>
+                    </tbody>
+                `;
+            return;
+        }
+        let tableHTML = `
+            <thead class="bg-gray-100">
+                <tr>
+                    ${Object.keys(data[0]).map(key => `<th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">${key}</th>`).join('')}
+                </tr>
+            </thead>
+            <tbody class="bg-white divide-y divide-gray-200">
+                ${data.map(row => `
+                    <tr>
+                        ${Object.values(row).map(value => `<td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">${value}</td>`).join('')}
+                    </tr>
+                `).join('')}
+            </tbody>
+        `;
+        dataTable.innerHTML = tableHTML;
+    }
+
+    downloadButton.addEventListener('click', function() {
+        if (!tableData || tableData.length === 0) {
+            alert('No data to download.'); // Provide feedback to the user
+            return;
+        }
+
+        const csvContent = convertToCSV(tableData);
+        if (csvContent) {
+            downloadCSV(csvContent, 'data.csv');
+        } else {
+            alert('Error generating CSV data.'); // Provide feedback to the user
+        }
+    });
+
+    function convertToCSV(data) {
+        if (!data || data.length === 0) {
+            return '';
+        }
+
+        const header = Object.keys(data[0]).join(',') + '\n';
+        const rows = data.map(row =>
+            Object.values(row).map(value => {
+                // Handle commas and quotes in values by escaping them
+                if (typeof value === 'string') {
+                    value = value.replace(/"/g, '""'); // Escape double quotes
+                    if (value.includes(',') || value.includes('"')) {
+                        value = `"${value}"`; // Enclose in double quotes if it contains commas or quotes
+                    }
+                }
+                return value;
+            }).join(',')
+        ).join('\n');
+
+        return header + rows;
+    }
+
+    function downloadCSV(csvContent, fileName) {
+        const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement("a");
+        link.setAttribute("href", url);
+        link.setAttribute("download", fileName);
+        link.style.visibility = 'hidden';
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        URL.revokeObjectURL(url); // Clean up the URL object
+    }
+
+    function calculateStats(data) {
+        const symptomCounts = {};
+        const dates = new Set();
+        let minDate, maxDate;
+
+        data.forEach(item => {
+            const date = item.date;
+            const symptom = item.symptom;
+
+            if (date) {
+                dates.add(date);
+                if (!minDate || parseDateString(date) < minDate) {
+                    minDate = parseDateString(date);
+                }
+                if (!maxDate || parseDateString(date) > maxDate) {
+                    maxDate = parseDateString(date);
+                }
+            }
+
+            if (symptom) {
+                symptomCounts[symptom] = (symptomCounts[symptom] || 0) + 1;
+            }
+        });
+
+        const dateRange = minDate && maxDate
+            ? `${minDate.toLocaleDateString()} - ${maxDate.toLocaleDateString()}`
+            : 'N/A';
+
+        return {
+            totalSymptoms: data.length,
+            daysWithSymptoms: dates.size,
+            dateRange: dateRange,
+            symptomCounts: symptomCounts
+        };
+    }
+
+    function displayStats(stats) {
+        totalSymptomsElement.textContent = `Total Symptoms Recorded: ${stats.totalSymptoms}`;
+        daysWithSymptomsElement.textContent = `Days With Symptoms Recorded: ${stats.daysWithSymptoms}`;
+        dateRangeElement.textContent = `Time Period: ${stats.dateRange}`;
+        symptomListElement.innerHTML = Object.entries(stats.symptomCounts)
+            .map(([symptom, count]) => `<li>${symptom}: ${count}</li>`)
+            .join('');
+    }
+
+
+    analysisButton.addEventListener('click', function() {
+        if (!tableData || tableData.length === 0) {
+            alert('No data to analyze.');
+            return;
+        }
+
+        const symptomData = processSymptomsData(tableData);
+        if (symptomData && symptomData.labels.length > 0) {
+            chartContainer.style.display = 'block';
+            renderChart(symptomData);
+        } else {
+            alert('No symptoms data to display.');
+            chartContainer.style.display = 'none';
+        }
+    });
+
+    function processSymptomsData(data) {
+        const symptomsByDate = {};
+
+        data.forEach(item => {
+            const date = item.date;
+            const symptom = item.symptom;
+            if (date && symptom) {
+                if (symptomsByDate[date]) {
+                    symptomsByDate[date][symptom] = (symptomsByDate[date][symptom] || 0) + 1;
+                } else {
+                    symptomsByDate[date] = { [symptom]: 1 };
+                }
+            }
+        });
+
+        const labels = Object.keys(symptomsByDate);
+        const datasets = [];
+        const uniqueSymptoms = new Set();
+
+        labels.forEach(date => {
+            const symptoms = symptomsByDate[date];
+            Object.keys(symptoms).forEach(symptom => uniqueSymptoms.add(symptom));
+        });
+
+         // Calculate total symptoms per day
+        const totalSymptoms = labels.map(date => {
+            let count = 0;
+            for (const symptom in symptomsByDate[date]) {
+                count += symptomsByDate[date][symptom];
+            }
+            return count;
+        });
+
+        datasets.push({
+            label: 'Total Symptoms',
+            data: totalSymptoms,
+            backgroundColor: 'rgba(255, 99, 132, 0.2)', // Red with opacity
+            borderColor: 'rgba(255, 99, 132, 1)',     // Red
+            fill: false,
+            type: chartType
+        });
+
+        return { labels, datasets };
+    }
+
+    function getRandomColor() {
+        const letters = '0123456789ABCDEF';
+        let color = '#';
+        for (let i = 0; i < 6; i++) {
+            color += letters[Math.floor(Math.random() * 16)];
+        }
+        return color;
+    }
+
+    function renderChart(symptomData) {
+        const ctx = symptomsChartCanvas.getContext('2d');
+        if (symptomsChart) {
+            symptomsChart.destroy();
+        }
+
+        symptomsChart = new Chart(ctx, {
+            type: chartType,
+            data: {
+                labels: symptomData.labels,
+                datasets: symptomData.datasets
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: true,
+                title: {
+                    display: true,
+                    text: 'Total Symptoms by Date',
+                    fontSize: 16
+                },
+                scales: {
+                    x: {
+                        display: true,
+                        title: {
+                            display: true,
+                            text: 'Date'
+                        }
+                    },
+                    y: {
+                        display: true,
+                        title: {
+                            display: true,
+                            text: 'Number of Symptoms'
+                        },
+                        beginAtZero: true
+                    }
+                },
+                 legend: {
+                    display: tr
