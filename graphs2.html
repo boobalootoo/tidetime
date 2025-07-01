@@ -1,0 +1,245 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>CSV Graph Generator</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&display=swap" rel="stylesheet"/>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <style>
+    body { font-family: 'Inter', sans-serif; }
+    #fileInput { opacity: 0; position: absolute; width: 100%; height: 100%; cursor: pointer; }
+    .upload-button-wrapper { position: relative; display: inline-flex; align-items: center; justify-content: center; padding: 0.75rem 2rem; background-color: #3b82f6; color: #fff; border-radius: 0.375rem; cursor: pointer; transition: background-color 0.3s ease; overflow: hidden; }
+    .upload-button-wrapper:hover { background-color: #2563eb; }
+    .upload-button-text { margin-left: 0.5rem; }
+    #chartCanvas { width: 100%; max-height: 500px; margin-top: 2rem; border: 1px solid #e2e8f0; border-radius: 0.375rem; background-color: #fff; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
+    #sidePanel { transition: transform 0.3s ease-in-out; }
+  </style>
+</head>
+<body class="bg-gray-100 p-6">
+  <div class="flex flex-col lg:flex-row max-w-7xl mx-auto">
+    <div class="flex-1">
+      <div class="bg-white shadow-md rounded-lg p-8">
+        <h1 class="text-2xl font-semibold text-blue-600 text-center mb-6">CSV Graph Generator</h1>
+        <div class="mb-6">
+          <div class="upload-button-wrapper">
+            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-6 h-6">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M12 16.5V9.75m0 0l-3 3m3-3l3 3M6 10.5a8.25 8.25 0 0116.5 0v5.4a8.25 8.25 0 01-16.5 0V10.5z" />
+            </svg>
+            <span class="upload-button-text">Upload CSV File</span>
+            <input id="fileInput" type="file" accept=".csv">
+          </div>
+          <p id="fileInfo" class="mt-2 text-sm text-gray-500">No file selected.</p>
+          <div id="error" class="mt-4 text-red-500 font-semibold"></div>
+        </div>
+        <div id="controls" style="display: none;" class="mb-4 flex flex-wrap gap-4">
+          <div class="flex flex-col min-w-[200px]">
+            <label for="xAxis" class="text-sm font-medium text-gray-700 mb-1">X Axis</label>
+            <select id="xAxis" class="border rounded p-2"></select>
+          </div>
+          <div class="flex flex-col min-w-[200px]">
+            <label for="yAxis" class="text-sm font-medium text-gray-700 mb-1">Y Axis</label>
+            <select id="yAxis" class="border rounded p-2"></select>
+          </div>
+          <div class="flex flex-col min-w-[200px]">
+            <label for="chartType" class="text-sm font-medium text-gray-700 mb-1">Chart Type</label>
+            <select id="chartType" class="border rounded p-2">
+              <option value="line">Line</option>
+              <option value="bar">Bar</option>
+            </select>
+          </div>
+        </div>
+        <canvas id="chartCanvas" style="display: none;"></canvas>
+      </div>
+    </div>
+
+    <!-- Side Panel -->
+    <div id="sidePanel" class="w-full lg:w-[300px] bg-white shadow-md rounded-lg p-6 mt-6 lg:mt-0 lg:ml-6 hidden lg:block">
+      <h2 class="text-xl font-semibold text-blue-600 mb-4">Point Details</h2>
+      <div id="sideContent" class="text-sm text-gray-700 space-y-2">
+        <p>Click a point on the graph to view details here.</p>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const fileInput = document.getElementById('fileInput');
+    const fileInfo = document.getElementById('fileInfo');
+    const errorDiv = document.getElementById('error');
+    const chartCanvas = document.getElementById('chartCanvas');
+    const ctx = chartCanvas.getContext('2d');
+    let chartInstance = null;
+    let tableData = [];
+
+    const xAxisSelect = document.getElementById('xAxis');
+    const yAxisSelect = document.getElementById('yAxis');
+    const chartTypeSelect = document.getElementById('chartType');
+    const controlsDiv = document.getElementById('controls');
+    const sidePanel = document.getElementById('sidePanel');
+    const sideContent = document.getElementById('sideContent');
+
+    fileInput.addEventListener('change', function() {
+      if (this.files.length > 0) {
+        fileInfo.textContent = `File selected: ${this.files[0].name}`;
+        errorDiv.textContent = '';
+        parseFile(this.files[0]);
+      } else {
+        fileInfo.textContent = 'No file selected.';
+        chartCanvas.style.display = 'none';
+        controlsDiv.style.display = 'none';
+      }
+    });
+
+    function parseFile(file) {
+      const reader = new FileReader();
+      reader.onload = function(event) {
+        const content = event.target.result;
+        const data = parseCSV(content);
+        if (data && data.length > 0) {
+          tableData = data;
+          populateDropdowns(data);
+          chartCanvas.style.display = 'block';
+          controlsDiv.style.display = 'flex';
+          createChart();
+        } else {
+          errorDiv.textContent = 'Error: No data found or invalid format.';
+          chartCanvas.style.display = 'none';
+          controlsDiv.style.display = 'none';
+        }
+      };
+      reader.onerror = function() {
+        errorDiv.textContent = 'Error reading file.';
+      };
+      reader.readAsText(file);
+    }
+
+    function parseCSV(content) {
+      const lines = content.trim().split('\n');
+      const header = lines[0].split(',').map(h => h.trim());
+      const data = [];
+      for (let i = 1; i < lines.length; i++) {
+        const values = lines[i].split(',').map(v => v.trim());
+        if (values.length === header.length) {
+          const entry = {};
+          for (let j = 0; j < header.length; j++) {
+            entry[header[j]] = values[j];
+          }
+          data.push(entry);
+        }
+      }
+      return data;
+    }
+
+    function populateDropdowns(data) {
+      const headers = Object.keys(data[0]);
+      xAxisSelect.innerHTML = '';
+      yAxisSelect.innerHTML = '';
+
+      headers.forEach(header => {
+        const optX = document.createElement('option');
+        optX.value = header;
+        optX.textContent = header;
+        xAxisSelect.appendChild(optX);
+
+        const optY = document.createElement('option');
+        optY.value = header;
+        optY.textContent = header;
+        yAxisSelect.appendChild(optY);
+      });
+
+      // Add "Number of Symptoms" option for Y
+      const symptomOpt = document.createElement('option');
+      symptomOpt.value = 'Number of Symptoms';
+      symptomOpt.textContent = 'Number of Symptoms';
+      yAxisSelect.appendChild(symptomOpt);
+
+      xAxisSelect.value = headers[0];
+      yAxisSelect.value = 'Number of Symptoms';
+    }
+
+    function createChart() {
+      const xAxisName = xAxisSelect.value;
+      const yAxisName = yAxisSelect.value;
+      const chartType = chartTypeSelect.value;
+
+      let labels = [];
+      let values = [];
+      let rowData = [];
+
+      tableData.forEach(row => {
+        let yValue = 0;
+        if (yAxisName === 'Number of Symptoms') {
+          for (const key in row) {
+            if (key.toLowerCase().includes('symptom') && row[key]) yValue++;
+          }
+        } else {
+          yValue = parseFloat(row[yAxisName]) || 0;
+        }
+
+        labels.push(row[xAxisName]);
+        values.push(yValue);
+        rowData.push(row);
+      });
+
+      if (chartInstance) chartInstance.destroy();
+
+      chartInstance = new Chart(ctx, {
+        type: chartType,
+        data: {
+          labels: labels,
+          datasets: [{
+            label: yAxisName,
+            data: values,
+            borderColor: 'rgba(59, 130, 246, 1)',
+            backgroundColor: 'rgba(59, 130, 246, 0.3)',
+            pointRadius: 3,
+            pointHoverRadius: 6
+          }]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          onClick: (e, elements) => {
+            if (elements.length > 0) {
+              const index = elements[0].index;
+              const row = rowData[index];
+              const dayRaw = row[Object.keys(row)[2]]; // Get third column for Day of Cycle
+              const day = dayRaw ? dayRaw.replace('day ', '') : 'N/A';
+              const symptoms = Object.keys(row).filter(k => k.toLowerCase().includes("symptom") && row[k]).map(k => row[k]);
+
+              sideContent.innerHTML = `
+                <p><strong>X (${xAxisName}):</strong> ${labels[index]}</p>
+                <p><strong>Day of Cycle:</strong> ${day}</p>
+                <p><strong>Symptoms:</strong> ${symptoms.length > 0 ? symptoms.join(', ') : 'None'}</p>
+              `;
+              sidePanel.classList.remove("hidden");
+            }
+          },
+          plugins: {
+            tooltip: {
+              callbacks: {
+                label: function(context) {
+                  const row = rowData[context.dataIndex];
+                  const dayRaw = row[Object.keys(row)[2]];
+                  const day = dayRaw ? dayRaw.replace('day ', '') : 'N/A';
+                  const symptoms = Object.keys(row).filter(k => k.toLowerCase().includes("symptom") && row[k]).map(k => row[k]);
+                  return [`Value: ${context.parsed.y}`, `Day: ${day}`, `Symptoms: ${symptoms.join(', ')}`];
+                }
+              }
+            }
+          },
+          scales: {
+            x: { title: { display: true, text: xAxisName } },
+            y: { title: { display: true, text: yAxisName } }
+          }
+        }
+      });
+    }
+
+    xAxisSelect.addEventListener('change', createChart);
+    yAxisSelect.addEventListener('change', createChart);
+    chartTypeSelect.addEventListener('change', createChart);
+  </script>
+</body>
+</html>
